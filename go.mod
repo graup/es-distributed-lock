@@ -1,4 +1,4 @@
-module github.com/aergoio/es-distributed-lock
+module github.com/graup/es-distributed-lock
 
 go 1.13
 
