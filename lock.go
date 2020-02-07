@@ -3,6 +3,7 @@ package lock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,13 +16,13 @@ type Lock struct {
 	client          *elastic.Client
 	indexName       string
 	typeName        string
-	lastTTL         int32
+	lastTTL         time.Duration
 	ID              string    `json:"-"`
 	Owner           string    `json:"owner"`
 	Acquired        time.Time `json:"acquired"`
 	Expires         time.Time `json:"expires"`
-	IsAcquired      bool      `json:"-"`
-	IsReleased      bool      `json:"-"`
+	isAcquired      bool
+	isReleased      bool
 	keepAliveActive bool
 }
 
@@ -37,8 +38,8 @@ func NewLock(client *elastic.Client, id string) *Lock {
 		Owner:           clientID,
 		indexName:       "distributed-locks",
 		typeName:        "lock",
-		IsAcquired:      false,
-		IsReleased:      false,
+		isAcquired:      false,
+		isReleased:      false,
 		keepAliveActive: false,
 	}
 }
@@ -52,10 +53,10 @@ func (lock *Lock) WithOwner(owner string) *Lock {
 
 // Acquire tries to acquire a lock with a TTL in seconds.
 // Returns nil when succesful or error otherwise.
-func (lock *Lock) Acquire(ctx context.Context, ttl int32) error {
+func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 	lock.lastTTL = ttl
 	lock.Acquired = time.Now()
-	lock.Expires = lock.Acquired.Add(time.Duration(ttl) * time.Second)
+	lock.Expires = lock.Acquired.Add(ttl)
 	// This script ensures that the owner is the same so that a single process can renew a named lock over again.
 	// In case the lock is expired, another process can take over.
 	script := elastic.NewScript(`
@@ -82,33 +83,36 @@ func (lock *Lock) Acquire(ctx context.Context, ttl int32) error {
 	if err != nil {
 		return err
 	}
-	lock.IsAcquired = true
+	lock.isAcquired = true
 	return nil
 }
 
 // KeepAlive causes the lock to automatically extend its TTL to avoid expiration.
 // This keep going until the context is cancelled, Release() is called, or the process dies.
+// This calls Acquire again {beforeExpiry} seconds before expirt.
 // Don't use KeepAlive with very short TTLs.
-func (lock *Lock) KeepAlive(ctx context.Context) error {
-	if !lock.IsAcquired {
+func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) error {
+	if !lock.isAcquired {
 		return errors.New("acquire lock before keep alive")
 	}
 	if lock.keepAliveActive {
 		return nil
 	}
+	if beforeExpiry >= lock.lastTTL {
+		return fmt.Errorf("KeepAlive's beforeExpire (%v) should be smaller than lock's TTL (%v)", beforeExpiry, lock.lastTTL)
+	}
 
-	// Call Acquire when lock expired 90%
-	seconds := 0.1 * float32(lock.lastTTL)
-	timeLeft := lock.Expires.Add(time.Duration(-seconds) * time.Second).Sub(time.Now())
-	if timeLeft < 0 {
-		timeLeft = 0
+	// Call Acquire {beforeExpiry} seconds before lock expires
+	timeLeft := lock.Expires.Add(-beforeExpiry).Sub(time.Now())
+	if timeLeft <= 0 {
+		timeLeft = 1 * time.Millisecond
 	}
 	lock.keepAliveActive = true
 	time.AfterFunc(timeLeft, func() {
 		lock.keepAliveActive = false
-		if !lock.IsReleased {
+		if !lock.isReleased {
 			lock.Acquire(ctx, lock.lastTTL)
-			lock.KeepAlive(ctx)
+			lock.KeepAlive(ctx, beforeExpiry)
 		}
 	})
 	return nil
@@ -116,7 +120,7 @@ func (lock *Lock) KeepAlive(ctx context.Context) error {
 
 // Release removes the lock (if it is still held)
 func (lock *Lock) Release() error {
-	if lock.IsReleased {
+	if lock.isReleased {
 		return nil
 	}
 	ctx := context.Background()
@@ -129,7 +133,17 @@ func (lock *Lock) Release() error {
 	if err != nil && elastic.IsNotFound(err) == false {
 		return err
 	}
-	lock.IsReleased = true
-	lock.IsAcquired = false
+	lock.isReleased = true
+	lock.isAcquired = false
 	return nil
+}
+
+// IsAcquired returns if lock is acquired and not expired
+func (lock *Lock) IsAcquired() bool {
+	return lock.isAcquired && lock.Expires.After(time.Now())
+}
+
+// IsReleased returns if lock was released manually or is expired
+func (lock *Lock) IsReleased() bool {
+	return lock.isReleased || lock.Expires.Before(time.Now())
 }

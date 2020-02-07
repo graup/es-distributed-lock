@@ -40,7 +40,7 @@ func TestLock(t *testing.T) {
 	}
 	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
 	ctx := context.Background()
-	if err := lock.Acquire(ctx, 1); err != nil {
+	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
 	defer lock.Release()
@@ -53,19 +53,19 @@ func TestExclusiveLock(t *testing.T) {
 	}
 	ctx := context.Background()
 	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
-	if err := lock.Acquire(ctx, 1); err != nil {
+	if err := lock.Acquire(ctx, 500*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
 	defer lock.Release()
 
 	lock2 := NewLock(client, "indexing-keepalive").WithOwner("client1")
-	if err := lock2.Acquire(ctx, 1); err == nil || err.Error() != "lock held by other client" {
+	if err := lock2.Acquire(ctx, 1*time.Second); err == nil || err.Error() != "lock held by other client" {
 		t.Errorf("expected error: lock should be held by other client")
 	}
 
 	// Wait for lock1 to expire
-	time.Sleep(1 * time.Second)
-	if err := lock2.Acquire(ctx, 1); err != nil {
+	time.Sleep(500 * time.Millisecond)
+	if err := lock2.Acquire(ctx, 500*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
 	defer lock2.Release()
@@ -78,11 +78,90 @@ func TestKeepAlive(t *testing.T) {
 	}
 	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
 	ctx := context.Background()
-	if err := lock.Acquire(ctx, 5); err != nil {
+	if err := lock.Acquire(ctx, 1000*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
-	lock.KeepAlive(ctx)
-	time.Sleep(10 * time.Second)
+	lock.KeepAlive(ctx, 250*time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
+	if lock.IsAcquired() == false {
+		t.Errorf("IsAcquired() returned false")
+	}
+	if lock.Release() != nil {
+		t.Errorf("Release() returned err: %v", err)
+	}
+	if lock.Release() != nil {
+		t.Errorf("Calling Release() twice should return nil, not %v", err)
+	}
+	if lock.IsAcquired() != false {
+		t.Errorf("IsAcquired() returned true")
+	}
+	if lock.IsReleased() != true {
+		t.Errorf("IsReleased() returned false")
+	}
+}
+
+func TestKeepAliveLater(t *testing.T) {
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	ctx := context.Background()
+	if err := lock.Acquire(ctx, 700*time.Millisecond); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+	time.Sleep(800 * time.Millisecond)
+	if err := lock.KeepAlive(ctx, 500*time.Millisecond); err != nil {
+		t.Errorf("KeepAlive() failed: %v", err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if lock.IsAcquired() == false {
+		t.Errorf("IsAcquired() returned false")
+	}
 	lock.Release()
-	time.Sleep(5 * time.Second)
+}
+
+func TestKeepAliveTooQuick(t *testing.T) {
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	ctx := context.Background()
+	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+	if err := lock.KeepAlive(ctx, 1*time.Second); err == nil {
+		t.Errorf("KeepAlive() should return error (too short beforeExpiry)")
+	}
+}
+
+func TestKeepAliveBeforeAcquire(t *testing.T) {
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	ctx := context.Background()
+	if err := lock.KeepAlive(ctx, 1*time.Second); err == nil {
+		t.Errorf("KeepAlive() should return error (need to acquire first)")
+	}
+}
+
+func TestKeepAliveMultiple(t *testing.T) {
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	ctx := context.Background()
+	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+	if err := lock.KeepAlive(ctx, 500*time.Millisecond); err != nil {
+		t.Errorf("KeepAlive() returned error: %v", err)
+	}
+	if err := lock.KeepAlive(ctx, 500*time.Millisecond); err != nil {
+		t.Errorf("KeepAlive() returned error: %v", err)
+	}
 }
