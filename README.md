@@ -1,6 +1,8 @@
 Distributed Lock using Elasticsearch
 ====================================
 
+[![Travis_ci](https://travis-ci.org/graup/es-distributed-lock.svg?branch=master)](https://travis-ci.org/graup/es-distributed-lock)
+
 This go module implements a primitive distributed lock using Elasticsearch.
 This is useful if you're already using ES anyway and need an easy way to add locks to improve efficiency.
 For example, when you have two concurrent processes writing to a shared ES storage but want to avoid both
@@ -34,8 +36,6 @@ type Lock struct {
 	Owner    string    `json:"owner"`
 	Acquired time.Time `json:"acquired"`
 	Expires  time.Time `json:"expires"`
-
-	// Has unexported fields.
 }
     Lock implements a distributed lock using Elasticsearch. The use case of this
     lock is improving efficiency (not correctness)
