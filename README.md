@@ -30,12 +30,11 @@ API
 package lock // import "github.com/graup/es-distributed-lock"
 
 type Lock struct {
-	ID         string    `json:"-"`
-	Owner      string    `json:"owner"`
-	Acquired   time.Time `json:"acquired"`
-	Expires    time.Time `json:"expires"`
-	IsAcquired bool      `json:"-"`
-	IsReleased bool      `json:"-"`
+	ID       string    `json:"-"`
+	Owner    string    `json:"owner"`
+	Acquired time.Time `json:"acquired"`
+	Expires  time.Time `json:"expires"`
+
 	// Has unexported fields.
 }
     Lock implements a distributed lock using Elasticsearch. The use case of this
@@ -44,14 +43,21 @@ type Lock struct {
 func NewLock(client *elastic.Client, id string) *Lock
     NewLock create a new lock identified by a string
 
-func (lock *Lock) Acquire(ctx context.Context, ttl int32) error
+func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error
     Acquire tries to acquire a lock with a TTL in seconds. Returns nil when
     succesful or error otherwise.
 
-func (lock *Lock) KeepAlive(ctx context.Context) error
+func (lock *Lock) IsAcquired() bool
+    IsAcquired returns if lock is acquired and not expired
+
+func (lock *Lock) IsReleased() bool
+    IsReleased returns if lock was released manually or is expired
+
+func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) error
     KeepAlive causes the lock to automatically extend its TTL to avoid
     expiration. This keep going until the context is cancelled, Release() is
-    called, or the process dies. Don't use KeepAlive with very short TTLs.
+    called, or the process dies. This calls Acquire again {beforeExpiry} seconds
+    before expirt. Don't use KeepAlive with very short TTLs.
 
 func (lock *Lock) Release() error
     Release removes the lock (if it is still held)

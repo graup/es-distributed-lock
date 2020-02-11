@@ -59,11 +59,11 @@ func TestExclusiveLock(t *testing.T) {
 	defer lock.Release()
 
 	lock2 := NewLock(client, "indexing-keepalive").WithOwner("client1")
-	if err := lock2.Acquire(ctx, 1*time.Second); err == nil || err.Error() != "lock held by other client" {
+	if err := lock2.Acquire(ctx, 500*time.Millisecond); err == nil || err.Error() != "lock held by other client" {
 		t.Errorf("expected error: lock should be held by other client")
 	}
 
-	// Wait for lock1 to expire
+	// Wait for lock1 to expire and then retry lock2
 	time.Sleep(500 * time.Millisecond)
 	if err := lock2.Acquire(ctx, 500*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
@@ -158,6 +158,7 @@ func TestKeepAliveMultiple(t *testing.T) {
 	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
+	// calling KeepAlive multiple times is fine
 	if err := lock.KeepAlive(ctx, 500*time.Millisecond); err != nil {
 		t.Errorf("KeepAlive() returned error: %v", err)
 	}
