@@ -1,7 +1,17 @@
 language: go
 
+services:
+    - docker
+
 go:
-- 1.x
-- 1.12.x
-- 1.11.x
-- 1.10.x
+    - 1.x
+    - 1.12.x
+    - 1.11.x
+    - 1.10.x
+    
+before_install:
+    - docker run -d --name es_test -p 9200:9200 -e "http.host=0.0.0.0" -e "transport.host=127.0.0.1" -e "bootstrap.memory_lock=true" -e "ES_JAVA_OPTS=-Xms1g -Xmx1g" docker.elastic.co/elasticsearch/elasticsearch-oss:6.4.0 elasticsearch -Enetwork.host=_local_,_site_ -Enetwork.publish_host=_local_
+    - sleep 5
+
+after_failure:
+    - docker logs es_test
