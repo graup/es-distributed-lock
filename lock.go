@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ type Lock struct {
 	isAcquired      bool
 	isReleased      bool
 	keepAliveActive bool
+	mutex           *sync.Mutex
 }
 
 var (
@@ -41,6 +43,7 @@ func NewLock(client *elastic.Client, id string) *Lock {
 		isAcquired:      false,
 		isReleased:      false,
 		keepAliveActive: false,
+		mutex:           &sync.Mutex{},
 	}
 }
 
@@ -54,6 +57,8 @@ func (lock *Lock) WithOwner(owner string) *Lock {
 // Acquire tries to acquire a lock with a TTL in seconds.
 // Returns nil when succesful or error otherwise.
 func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
+	lock.mutex.Lock()
+	defer lock.mutex.Unlock()
 	lock.lastTTL = ttl
 	lock.Acquired = time.Now()
 	lock.Expires = lock.Acquired.Add(ttl)
@@ -92,6 +97,8 @@ func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 // This calls Acquire again {beforeExpiry} seconds before expirt.
 // Don't use KeepAlive with very short TTLs.
 func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) error {
+	lock.mutex.Lock()
+	defer lock.mutex.Unlock()
 	if !lock.isAcquired {
 		return errors.New("acquire lock before keep alive")
 	}
@@ -109,10 +116,14 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 	}
 	lock.keepAliveActive = true
 	time.AfterFunc(timeLeft, func() {
+		lock.mutex.Lock()
 		lock.keepAliveActive = false
 		if !lock.isReleased {
+			lock.mutex.Unlock()
 			lock.Acquire(ctx, lock.lastTTL)
 			lock.KeepAlive(ctx, beforeExpiry)
+		} else {
+			lock.mutex.Unlock()
 		}
 	})
 	return nil
@@ -120,6 +131,8 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 
 // Release removes the lock (if it is still held)
 func (lock *Lock) Release() error {
+	lock.mutex.Lock()
+	defer lock.mutex.Unlock()
 	if lock.isReleased {
 		return nil
 	}
@@ -140,10 +153,14 @@ func (lock *Lock) Release() error {
 
 // IsAcquired returns if lock is acquired and not expired
 func (lock *Lock) IsAcquired() bool {
+	lock.mutex.Lock()
+	defer lock.mutex.Unlock()
 	return lock.isAcquired && lock.Expires.After(time.Now())
 }
 
 // IsReleased returns if lock was released manually or is expired
 func (lock *Lock) IsReleased() bool {
+	lock.mutex.Lock()
+	defer lock.mutex.Unlock()
 	return lock.isReleased || lock.Expires.Before(time.Now())
 }
