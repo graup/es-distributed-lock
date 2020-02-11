@@ -2,6 +2,7 @@ Distributed Lock using Elasticsearch
 ====================================
 
 [![Travis_ci](https://travis-ci.org/graup/es-distributed-lock.svg?branch=master)](https://travis-ci.org/graup/es-distributed-lock)
+[![codecov](https://codecov.io/gh/graup/es-distributed-lock/branch/master/graph/badge.svg)](https://codecov.io/gh/graup/es-distributed-lock)
 
 This go module implements a primitive distributed lock using Elasticsearch.
 This is useful if you're already using ES anyway and need an easy way to add locks to improve efficiency.
