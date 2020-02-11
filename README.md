@@ -70,5 +70,6 @@ func (lock *Lock) WithOwner(owner string) *Lock
 References
 ----------
 
+- [Optimistic Concurrency Control in Elasticsearch. Adam Vanderbush (2017)](https://qbox.io/blog/optimistic-concurrency-control-in-elasticsearch)
 - [How to do distributed locking. Martin Kleppmann (2016)](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
 - [ElasticSearch.DistributedLock implementation in C# (2015)](https://github.com/dmombour/ElasticSearch.DistributedLock)
