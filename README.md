@@ -26,6 +26,11 @@ Note that this has no correctness guarantees: it is still possible (although unl
 However, Elasticsearch itself has consistency guarantees, so you should use
 [Optimistic Concurrency Control](https://qbox.io/blog/optimistic-concurrency-control-in-elasticsearch) on the storage layer to solve data conflicts.
 
+**Which TTL should I use?**
+
+That depends on your availability requirements. I suggest times of 15-30 seconds.
+Avoid extremely short TTLs (less than 5 seconds) as this may create timing issues. 
+
 API
 ---
 
