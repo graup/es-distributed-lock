@@ -38,12 +38,14 @@ func TestLock(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
-	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
+	lock := NewLock(client, "indexing-simple")
 	ctx := context.Background()
 	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
-	defer lock.Release()
+	if err := lock.MustRelease(); err != nil {
+		t.Errorf("MustRelease() failed: %v", err)
+	}
 }
 
 func TestExclusiveLock(t *testing.T) {
@@ -67,6 +69,37 @@ func TestExclusiveLock(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	if err := lock2.Acquire(ctx, 500*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
+	}
+	defer lock2.Release()
+
+	// Releasing the first lock now should be a noop, so MustRelease must error
+	if err := lock.MustRelease(); err == nil {
+		t.Errorf("MustRelease() expected error")
+	}
+}
+
+func TestExclusiveLock2(t *testing.T) {
+	// Don't delete other client's lock
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	ctx := context.Background()
+	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
+	if err := lock.Acquire(ctx, 500*time.Millisecond); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+
+	// Wait for lock1 to expire and then get lock2
+	time.Sleep(500 * time.Millisecond)
+	lock2 := NewLock(client, "indexing-keepalive").WithOwner("client1")
+	if err := lock2.Acquire(ctx, 500*time.Millisecond); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+
+	// Remove lock1. This should be a noop
+	if err := lock.Release(); err != nil {
+		t.Errorf("Release() failed: %v", err)
 	}
 	defer lock2.Release()
 }

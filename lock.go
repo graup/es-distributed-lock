@@ -128,8 +128,7 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 	return nil
 }
 
-// Release removes the lock (if it is still held)
-func (lock *Lock) Release() error {
+func (lock *Lock) release(errorIfNoop bool) error {
 	lock.mutex.Lock()
 	defer lock.mutex.Unlock()
 	if lock.isReleased {
@@ -139,15 +138,28 @@ func (lock *Lock) Release() error {
 	// Query checking that lock is still held by this client
 	query := elastic.NewBoolQuery().Must(
 		elastic.NewTermQuery("_id", lock.ID),
-		elastic.NewTermQuery("owner", lock.Owner),
+		elastic.NewTermQuery("owner.keyword", lock.Owner), // Without .keyword, this fails at matching analyzed strings (e.g. containing hyphens or spaces)
 	)
-	_, err := lock.client.DeleteByQuery().Index(lock.indexName).Query(query).Refresh("true").Conflicts("proceed").Do(ctx)
-	if err != nil && elastic.IsNotFound(err) == false {
+	resp, err := lock.client.DeleteByQuery().Index(lock.indexName).Query(query).Refresh("true").Conflicts("proceed").Do(ctx)
+	if err != nil {
 		return err
 	}
 	lock.isReleased = true
 	lock.isAcquired = false
+	if errorIfNoop && resp.Deleted == 0 {
+		return fmt.Errorf("release had no effect (lock: %v, client: %v)", lock.ID, lock.Owner)
+	}
 	return nil
+}
+
+// Release removes the lock (if it is still held)
+func (lock *Lock) Release() error {
+	return lock.release(false)
+}
+
+// MustRelease removes the lock (if it is still held) but returns an error if the result was a noop
+func (lock *Lock) MustRelease() error {
+	return lock.release(true)
 }
 
 // IsAcquired returns if lock is acquired and not expired
