@@ -77,6 +77,7 @@ func TestKeepAlive(t *testing.T) {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
 	lock := NewLock(client, "indexing-keepalive").WithOwner("client0")
+	defer lock.Release()
 	ctx := context.Background()
 	if err := lock.Acquire(ctx, 1000*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
@@ -106,6 +107,7 @@ func TestKeepAliveLater(t *testing.T) {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
 	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	defer lock.Release()
 	ctx := context.Background()
 	if err := lock.Acquire(ctx, 700*time.Millisecond); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
@@ -118,7 +120,6 @@ func TestKeepAliveLater(t *testing.T) {
 	if lock.IsAcquired() == false {
 		t.Errorf("IsAcquired() returned false")
 	}
-	lock.Release()
 }
 
 func TestKeepAliveTooQuick(t *testing.T) {
@@ -127,6 +128,7 @@ func TestKeepAliveTooQuick(t *testing.T) {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
 	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	defer lock.Release()
 	ctx := context.Background()
 	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
@@ -142,6 +144,7 @@ func TestKeepAliveBeforeAcquire(t *testing.T) {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
 	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	defer lock.Release()
 	ctx := context.Background()
 	if err := lock.KeepAlive(ctx, 1*time.Second); err == nil {
 		t.Errorf("KeepAlive() should return error (need to acquire first)")
@@ -154,6 +157,7 @@ func TestKeepAliveMultiple(t *testing.T) {
 		t.Errorf("Failed to create elastic client: %q", err)
 	}
 	lock := NewLock(client, "indexing-keepalive2").WithOwner("client0")
+	defer lock.Release()
 	ctx := context.Background()
 	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)

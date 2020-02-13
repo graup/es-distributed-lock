@@ -141,7 +141,7 @@ func (lock *Lock) Release() error {
 		elastic.NewTermQuery("_id", lock.ID),
 		elastic.NewTermQuery("owner", lock.Owner),
 	)
-	_, err := lock.client.DeleteByQuery().Index(lock.indexName).Query(query).Conflicts("proceed").Do(ctx)
+	_, err := lock.client.DeleteByQuery().Index(lock.indexName).Query(query).Refresh("true").Conflicts("proceed").Do(ctx)
 	if err != nil && elastic.IsNotFound(err) == false {
 		return err
 	}
