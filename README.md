@@ -66,8 +66,13 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
     expirt. Don't use KeepAlive with very short TTLs, rather call Acquire
     yourself when you need to.
 
+func (lock *Lock) MustRelease() error
+    MustRelease removes the lock (if it is still held) but returns an error if
+    the result was a noop.
+
 func (lock *Lock) Release() error
-    Release removes the lock (if it is still held)
+    Release removes the lock (if it is still held). The only case this errors is
+    if there's a connection error with ES.
 
 func (lock *Lock) WithOwner(owner string) *Lock
     WithOwner is a shortcut method to set the owner manually. If you don't

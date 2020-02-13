@@ -155,12 +155,13 @@ func (lock *Lock) release(errorIfNoop bool) error {
 	return nil
 }
 
-// Release removes the lock (if it is still held)
+// Release removes the lock (if it is still held).
+// The only case this errors is if there's a connection error with ES.
 func (lock *Lock) Release() error {
 	return lock.release(false)
 }
 
-// MustRelease removes the lock (if it is still held) but returns an error if the result was a noop
+// MustRelease removes the lock (if it is still held) but returns an error if the result was a noop.
 func (lock *Lock) MustRelease() error {
 	return lock.release(true)
 }
