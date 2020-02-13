@@ -2,7 +2,6 @@ package lock
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -83,7 +82,7 @@ func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 	})
 	resp, err := lock.client.Update().Index(lock.indexName).Type(lock.typeName).Id(lock.ID).Script(script).Upsert(lock).Refresh("true").ScriptedUpsert(true).Do(ctx)
 	if elastic.IsConflict(err) || err == nil && resp.Result == "noop" {
-		return errors.New("lock held by other client")
+		return fmt.Errorf("lock held by other client")
 	}
 	if err != nil {
 		return err
@@ -100,7 +99,7 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 	lock.mutex.Lock()
 	defer lock.mutex.Unlock()
 	if !lock.isAcquired {
-		return errors.New("acquire lock before keep alive")
+		return fmt.Errorf("acquire lock before keep alive")
 	}
 	if lock.keepAliveActive {
 		return nil
