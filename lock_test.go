@@ -203,3 +203,26 @@ func TestKeepAliveMultiple(t *testing.T) {
 		t.Errorf("KeepAlive() returned error: %v", err)
 	}
 }
+
+func TestAcquireAfterRelease(t *testing.T) {
+	client, err := NewElasticClient("localhost:9200")
+	if err != nil {
+		t.Errorf("Failed to create elastic client: %q", err)
+	}
+	lock := NewLock(client, "indexing-acquire-release")
+	ctx := context.Background()
+	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+	if err := lock.MustRelease(); err != nil {
+		t.Errorf("MustRelease() failed: %v", err)
+	}
+	// Acquire again
+	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
+		t.Errorf("Acquire() failed: %v", err)
+	}
+	// Release again
+	if err := lock.MustRelease(); err != nil {
+		t.Errorf("MustRelease() failed: %v", err)
+	}
+}

@@ -88,6 +88,7 @@ func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 		return err
 	}
 	lock.isAcquired = true
+	lock.isReleased = false
 	return nil
 }
 
@@ -131,6 +132,9 @@ func (lock *Lock) release(errorIfNoop bool) error {
 	lock.mutex.Lock()
 	defer lock.mutex.Unlock()
 	if lock.isReleased {
+		if errorIfNoop {
+			return fmt.Errorf("lock was already released")
+		}
 		return nil
 	}
 	ctx := context.Background()
