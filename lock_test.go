@@ -24,7 +24,7 @@ func NewElasticClient(esURL string) (*elastic.Client, error) {
 	client, err := elastic.NewClient(
 		elastic.SetHttpClient(httpClient),
 		elastic.SetURL(url),
-		elastic.SetHealthcheckTimeoutStartup(30*time.Second),
+		elastic.SetHealthcheckTimeoutStartup(10*time.Second),
 		elastic.SetSniff(false),
 	)
 	if err != nil {

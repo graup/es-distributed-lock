@@ -48,13 +48,13 @@ func NewLock(client *elastic.Client, id string) *Lock {
 }
 
 // WithOwner is a shortcut method to set the owner manually.
-// If you don't specify an owner, a random UUID is used automayically.
+// If you don't specify an owner, a random UUID is used automatically.
 func (lock *Lock) WithOwner(owner string) *Lock {
 	lock.Owner = owner
 	return lock
 }
 
-// Acquire tries to acquire a lock with a TTL in seconds.
+// Acquire tries to acquire a lock with a TTL.
 // Returns nil when succesful or error otherwise.
 func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 	lock.mutex.Lock()
@@ -94,8 +94,8 @@ func (lock *Lock) Acquire(ctx context.Context, ttl time.Duration) error {
 
 // KeepAlive causes the lock to automatically extend its TTL to avoid expiration.
 // This keep going until the context is cancelled, Release() is called, or the process dies.
-// This calls Acquire again {beforeExpiry} seconds before expirt.
-// Don't use KeepAlive with very short TTLs.
+// This calls Acquire again {beforeExpiry} before expirt.
+// Don't use KeepAlive with very short TTLs, rather call Acquire yourself when you need to.
 func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) error {
 	lock.mutex.Lock()
 	defer lock.mutex.Unlock()
@@ -109,7 +109,7 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 		return fmt.Errorf("KeepAlive's beforeExpire (%v) should be smaller than lock's TTL (%v)", beforeExpiry, lock.lastTTL)
 	}
 
-	// Call Acquire {beforeExpiry} seconds before lock expires
+	// Call Acquire {beforeExpiry} before lock expires
 	timeLeft := lock.Expires.Add(-beforeExpiry).Sub(time.Now())
 	if timeLeft <= 0 {
 		timeLeft = 1 * time.Millisecond
@@ -118,12 +118,11 @@ func (lock *Lock) KeepAlive(ctx context.Context, beforeExpiry time.Duration) err
 	time.AfterFunc(timeLeft, func() {
 		lock.mutex.Lock()
 		lock.keepAliveActive = false
-		if !lock.isReleased {
-			lock.mutex.Unlock()
+		isReleased := lock.isReleased
+		lock.mutex.Unlock()
+		if !isReleased {
 			lock.Acquire(ctx, lock.lastTTL)
 			lock.KeepAlive(ctx, beforeExpiry)
-		} else {
-			lock.mutex.Unlock()
 		}
 	})
 	return nil

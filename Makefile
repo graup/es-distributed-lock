@@ -6,7 +6,7 @@ deps:
 	go get ./...
 
 test:
-	go test
+	go test -race
 	
 doc:
 	go doc -all lock
