@@ -221,8 +221,12 @@ func TestAcquireAfterRelease(t *testing.T) {
 	if err := lock.Acquire(ctx, 1*time.Second); err != nil {
 		t.Errorf("Acquire() failed: %v", err)
 	}
-	// Release again
+	// Release again. it should work
 	if err := lock.MustRelease(); err != nil {
 		t.Errorf("MustRelease() failed: %v", err)
+	}
+	// Release again. it should fail
+	if err := lock.MustRelease(); err == nil {
+		t.Errorf("MustRelease() expected error")
 	}
 }
